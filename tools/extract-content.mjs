@@ -1,9 +1,9 @@
-// Wyciąga treść i metadane ze starej strony do JSON-a gotowego do importu w WordPressie.
-// Dzięki temu 14 stron nie jest przepisywanych ręcznie do panelu.
+// Extracts content and metadata from the old site into JSON ready for WordPress import,
+// so pages don't have to be retyped into the admin panel by hand.
 //
-// Źródła: zrzut z tests/snapshots/old/content.json (meta, nagłówki, obrazy, CTA)
-//         + JSON-LD z theme/content/jsonld/*.json (FAQ, dane firmy).
-// Użycie: node extract-content.mjs --snapshot ../tests/snapshots/old --theme ../theme
+// Sources: the capture in tests/snapshots/old/content.json (meta, headings, images, CTAs)
+//          plus JSON-LD from theme/content/jsonld/*.json (FAQs, business data).
+// Usage: node extract-content.mjs --snapshot ../tests/snapshots/old --theme ../theme
 import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
 
@@ -21,8 +21,8 @@ function faqsFrom(jsonLd) {
 }
 
 function businessFrom(all) {
-    // AutoRental/LocalBusiness niosą pełny NAP, Organization tylko podstawy —
-    // scalamy je, zaczynając od bogatszego typu.
+    // AutoRental/LocalBusiness carry the full NAP, Organization only the basics —
+    // merge them, starting from the richer type.
     const rich = all.find((j) => ["AutoRental", "LocalBusiness"].includes(j?.["@type"]));
     const org = all.find((j) => j?.["@type"] === "Organization");
     if (!rich && !org) return null;
@@ -78,7 +78,7 @@ async function main() {
         };
     });
 
-    // Dane firmy powtarzają się na każdej stronie → w WP jedna strona opcji ACF.
+    // Business data repeats on every page, so it becomes a single ACF options page.
     await mkdir(path.join(THEME, "content"), { recursive: true });
     await writeFile(path.join(THEME, "content", "firma.json"), JSON.stringify(firma, null, 2));
     await writeFile(path.join(THEME, "content", "pages.json"), JSON.stringify(pages, null, 2));
@@ -88,7 +88,7 @@ async function main() {
     console.log(`Wyeksportowano ${pages.length} stron do ${THEME}/content/pages.json`);
     console.log(`  pytania FAQ:        ${faqCount} (gotowe do wrzucenia w repeatery ACF)`);
     console.log(`  unikalne obrazy:    ${imgCount}`);
-    console.log(`  dane firmy (NAP):   ${firma ? "wyciągnięte ✓" : "NIE ZNALEZIONO — sprawdź JSON-LD"}`);
+    console.log(`  business data (NAP): ${firma ? "extracted" : "NOT FOUND — check the JSON-LD"}`);
     const noTitle = pages.filter((p) => !p.seo.title).map((p) => p.route);
     if (noTitle.length) console.log(`  UWAGA — brak title dla: ${noTitle.join(", ")}`);
 }

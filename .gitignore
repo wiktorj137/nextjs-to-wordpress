@@ -2,3 +2,5 @@ node_modules/
 migration.config.json
 tests/snapshots/
 tests/report/
+tests/deviations.json
+tests/routes.json

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" width="900" height="300" role="img" aria-label="Why two test layers are needed">
+  <g font-family="ui-monospace,SFMono-Regular,Menlo,monospace" fill="#8b8b95">
+
+    <rect x="30" y="40" width="380" height="200" rx="12" fill="none" stroke="#6366f1" stroke-width="2"/>
+    <text x="220" y="72" text-anchor="middle" font-size="16" fill="#6366f1">Pixel diff</text>
+    <text x="55" y="106" font-size="13" fill="#22a06b">catches</text>
+    <text x="55" y="128" font-size="12">shifted button, wrong spacing</text>
+    <text x="55" y="148" font-size="12">broken font, changed color</text>
+    <text x="55" y="184" font-size="13" fill="#d1495b">misses</text>
+    <text x="55" y="206" font-size="12">typo in a phone number</text>
+    <text x="55" y="226" font-size="12">missing canonical tag</text>
+
+    <rect x="490" y="40" width="380" height="200" rx="12" fill="none" stroke="#0ea5e9" stroke-width="2"/>
+    <text x="680" y="72" text-anchor="middle" font-size="16" fill="#0ea5e9">Content diff</text>
+    <text x="515" y="106" font-size="13" fill="#22a06b">catches</text>
+    <text x="515" y="128" font-size="12">JSON-LD drift, lost CTA links</text>
+    <text x="515" y="148" font-size="12">duplicated nav, missing favicon</text>
+    <text x="515" y="184" font-size="13" fill="#d1495b">misses</text>
+    <text x="515" y="206" font-size="12">button moved by 40px</text>
+    <text x="515" y="226" font-size="12">section padding regression</text>
+
+    <text x="450" y="278" text-anchor="middle" font-size="13" fill="#8b8b95">Each layer found bugs the other could not see.</text>
+  </g>
+</svg>

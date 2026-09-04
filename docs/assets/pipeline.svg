@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 330" width="980" height="330" role="img" aria-label="Migration pipeline: export, theme, content, variants, wire, css, import, verify">
+  <g font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13" fill="#8b8b95">
+
+    <rect x="20"  y="30" width="128" height="58" rx="10" fill="none" stroke="#8b8b95" stroke-width="1.6"/>
+    <text x="84"  y="55" text-anchor="middle" fill="#6366f1" font-size="14">export</text>
+    <text x="84"  y="74" text-anchor="middle" font-size="11">next build</text>
+
+    <rect x="176" y="30" width="128" height="58" rx="10" fill="none" stroke="#8b8b95" stroke-width="1.6"/>
+    <text x="240" y="55" text-anchor="middle" fill="#6366f1" font-size="14">theme</text>
+    <text x="240" y="74" text-anchor="middle" font-size="11">html → php</text>
+
+    <rect x="332" y="30" width="128" height="58" rx="10" fill="none" stroke="#8b8b95" stroke-width="1.6"/>
+    <text x="396" y="55" text-anchor="middle" fill="#6366f1" font-size="14">content</text>
+    <text x="396" y="74" text-anchor="middle" font-size="11">meta, FAQ</text>
+
+    <rect x="488" y="30" width="150" height="58" rx="10" fill="none" stroke="#0ea5e9" stroke-width="2"/>
+    <text x="563" y="55" text-anchor="middle" fill="#0ea5e9" font-size="14">variants</text>
+    <text x="563" y="74" text-anchor="middle" font-size="11">what is a field?</text>
+
+    <rect x="666" y="30" width="128" height="58" rx="10" fill="none" stroke="#8b8b95" stroke-width="1.6"/>
+    <text x="730" y="55" text-anchor="middle" fill="#6366f1" font-size="14">wire</text>
+    <text x="730" y="74" text-anchor="middle" font-size="11">text → fields</text>
+
+    <rect x="822" y="30" width="128" height="58" rx="10" fill="none" stroke="#8b8b95" stroke-width="1.6"/>
+    <text x="886" y="55" text-anchor="middle" fill="#6366f1" font-size="14">css</text>
+    <text x="886" y="74" text-anchor="middle" font-size="11">tailwind</text>
+
+    <path d="M148 59 h28" stroke="#8b8b95" stroke-width="1.6"/>
+    <path d="M304 59 h28" stroke="#8b8b95" stroke-width="1.6"/>
+    <path d="M460 59 h28" stroke="#8b8b95" stroke-width="1.6"/>
+    <path d="M638 59 h28" stroke="#8b8b95" stroke-width="1.6"/>
+    <path d="M794 59 h28" stroke="#8b8b95" stroke-width="1.6"/>
+
+    <path d="M886 88 v34 h-802 v34" stroke="#8b8b95" stroke-width="1.6" fill="none"/>
+    <polygon points="84,164 78,150 90,150" fill="#8b8b95"/>
+
+    <rect x="20"  y="166" width="128" height="58" rx="10" fill="none" stroke="#8b8b95" stroke-width="1.6"/>
+    <text x="84"  y="191" text-anchor="middle" fill="#6366f1" font-size="14">import</text>
+    <text x="84"  y="210" text-anchor="middle" font-size="11">wp-cli</text>
+
+    <path d="M148 195 h28" stroke="#8b8b95" stroke-width="1.6"/>
+
+    <rect x="176" y="166" width="180" height="58" rx="10" fill="none" stroke="#22a06b" stroke-width="2"/>
+    <text x="266" y="191" text-anchor="middle" fill="#22a06b" font-size="14">verify</text>
+    <text x="266" y="210" text-anchor="middle" font-size="11">pixels + content + SEO</text>
+
+    <text x="20" y="270" font-size="12">Order matters: generating templates overwrites files, so field wiring</text>
+    <text x="20" y="290" font-size="12">must run right after it. That is why everything lives in a Makefile.</text>
+  </g>
+</svg>

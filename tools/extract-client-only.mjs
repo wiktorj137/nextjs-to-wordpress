@@ -1,11 +1,11 @@
-// Wyciąga komponenty, których NIE MA w statycznym eksporcie.
+// Extracts components that are ABSENT from the static export.
 //
-// Część komponentów Reacta renderuje się dopiero po stronie klienta (baner cookies
-// sprawdza localStorage, pasek CTA reaguje na scroll). W eksporcie ich nie widać,
-// więc generator szablonów by je pominął — i strona po migracji cicho straciłaby
-// funkcjonalność. Ten skrypt czyta je z ŻYWEJ starej strony.
+// Some React components only render client-side (a consent banner checks
+// localStorage, a sticky CTA bar reacts to scroll). They are invisible in the
+// export, so a template generator skips them and the migrated site quietly loses
+// functionality. This script reads them from the LIVE old site instead.
 //
-// Użycie: node extract-client-only.mjs --base http://localhost:3000 --out ../theme/template-parts
+// Usage: node extract-client-only.mjs --base http://localhost:3000 --out ../theme/template-parts
 import { chromium } from "playwright";
 import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
@@ -16,17 +16,17 @@ const args = Object.fromEntries(
 const BASE = (args.base || "http://localhost:3000").replace(/\/$/, "");
 const OUT = args.out || "../theme/template-parts";
 
-// Komponenty renderowane wyłącznie po stronie klienta — z konfiguracji projektu.
+// Client-only components, declared in the project config.
 const CONFIG = JSON.parse(await readFile(args.config || "../migration.config.json", "utf8"));
 
-const TARGETS = Object.entries(CONFIG.komponentyKlienckie ?? {})
+const TARGETS = Object.entries(CONFIG.clientOnlyComponents ?? {})
     .filter(([name]) => !name.startsWith("_"))
     .map(([name, cfg]) => ({
         name,
         viewport: cfg.viewport,
-        findSource: cfg.znajdz,
-        wire: (html) => (cfg.podepnij ?? []).reduce(
-            (acc, r) => acc.replace(r.regex ? new RegExp(r.szukaj) : r.szukaj, r.zamien),
+        findSource: cfg.find,
+        wire: (html) => (cfg.wire ?? []).reduce(
+            (acc, r) => acc.replace(r.regex ? new RegExp(r.search) : r.search, r.replace),
             html
         ),
     }));
@@ -40,17 +40,17 @@ async function main() {
         const ctx = await browser.newContext({ viewport: target.viewport ?? { width: 1440, height: 900 } });
         const page = await ctx.newPage();
         await page.goto(BASE + "/", { waitUntil: "networkidle" });
-        // Scroll wyzwala komponenty zależne od pozycji strony.
+        // Scrolling triggers components that depend on page position.
         await page.evaluate(() => window.scrollTo(0, 600));
         await page.waitForTimeout(800);
 
-        // page.evaluate serializuje wynik — element DOM przechodzi jako pusty obiekt,
-        // więc zwracamy outerHTML już po stronie przeglądarki.
+        // page.evaluate serializes its result — a DOM element comes back as an empty
+        // object, so return outerHTML from inside the browser.
         const html = await page.evaluate(`(() => (${target.findSource}))()?.outerHTML ?? null`);
         await ctx.close();
 
         if (!html) {
-            console.log(`  ${target.name}: NIE ZNALEZIONO — sprawdź selektor`);
+            console.log(`  ${target.name}: NOT FOUND — check the selector`);
             continue;
         }
 
@@ -58,12 +58,12 @@ async function main() {
         const file = path.join(OUT, `${target.name}.php`);
         await writeFile(file, `<?php
 /**
- * ${target.name} — wyciągnięte z żywej strony Next.js przez tools/extract-client-only.mjs.
+ * ${target.name} — extracted from the live Next.js site by tools/extract-client-only.mjs.
  *
- * Ten komponent renderował się dopiero po stronie klienta, więc NIE MA GO
- * w statycznym eksporcie. Bez tego kroku zniknąłby po migracji bez śladu.
+ * This component only rendered client-side, so it is NOT present in the static
+ * export. Without this step it would disappear in the migration without a trace.
  *
- * Zachowanie obsługuje assets/js/main.js.
+ * Behaviour is handled by assets/js/main.js.
  */
 defined( 'ABSPATH' ) || exit;
 ?>
@@ -71,13 +71,13 @@ ${wired}
 `);
         found.push(target.name);
         if (/(?:tel:|wa\.me)/.test(wired)) {
-            console.log(`    UWAGA: ${target.name} zawiera zahardkodowany numer — podmień na <prefiks>_tel() / <prefiks>_whatsapp_url()`);
+            console.log(`    WARNING: ${target.name} contains a hardcoded contact value — replace it with a field call`);
         }
         console.log(`  ${target.name}: ${(html.length / 1024).toFixed(1)} kB → ${file}`);
     }
 
     await browser.close();
-    console.log(`\nWyciągnięto ${found.length}/${TARGETS.length} komponentów klienckich.`);
+    console.log(`\nExtracted ${found.length}/${TARGETS.length} client-only components.`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

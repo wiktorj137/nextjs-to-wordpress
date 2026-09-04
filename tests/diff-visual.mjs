@@ -1,5 +1,5 @@
-// Porównanie pixel-by-pixel zrzutów starej i nowej strony. Generuje raport HTML.
-// Użycie: node diff-visual.mjs [--old snapshots/old] [--new snapshots/new] [--threshold 0.1]
+// Pixel-by-pixel comparison of old and new screenshots. Produces an HTML report.
+// Usage: node diff-visual.mjs [--old snapshots/old] [--new snapshots/new] [--threshold 0.1]
 import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
 import { PNG } from "pngjs";
@@ -11,13 +11,13 @@ const args = Object.fromEntries(
 const OLD = args.old || "snapshots/old";
 const NEW = args.new || "snapshots/new";
 const OUT = args.report || "report";
-// Maksymalny dopuszczalny odsetek różniących się pikseli na stronę.
+// Maximum share of differing pixels allowed per page.
 const THRESHOLD = Number(args.threshold ?? 0.1);
-// Tolerancja różnicy koloru pojedynczego piksela (antyaliasing fontów).
+// Per-pixel colour tolerance (absorbs font antialiasing).
 const PIXEL_TOLERANCE = 0.15;
 
-// Dopasowuje wysokość obu obrazów — różnica wysokości sama w sobie jest błędem,
-// ale chcemy jeszcze zobaczyć GDZIE się rozjeżdża.
+// Pads both images to the same size. A height difference is a failure in itself,
+// but we still want to see WHERE they diverge.
 function pad(png, width, height) {
     if (png.width === width && png.height === height) return png;
     const out = new PNG({ width, height });
@@ -26,11 +26,11 @@ function pad(png, width, height) {
     return out;
 }
 
-/** Zatwierdzone odstępstwa — patrz odstepstwa.json i ODSTEPSTWA.md. */
+/** Approved deviations - see deviations.json and docs/TESTING.md. */
 async function loadDeviations() {
     try {
-        const d = JSON.parse(await readFile(new URL("./odstepstwa.json", import.meta.url), "utf8"));
-        return d.wizualne ?? [];
+        const d = JSON.parse(await readFile(new URL("./deviations.json", import.meta.url), "utf8"));
+        return d.visual ?? [];
     } catch {
         return [];
     }
@@ -39,10 +39,10 @@ async function loadDeviations() {
 async function main() {
     const deviations = await loadDeviations();
 
-    /** Podwyższona tolerancja dla zatwierdzonego odstępstwa, jeśli takie istnieje. */
+    /** Raised tolerance for an approved deviation, if one applies. */
     const allowanceFor = (vp, page) => {
-        const hit = deviations.find((d) => d.strony.includes(page) && d.szerokosci.includes(vp));
-        return hit ? { limit: hit.tolerancja, powod: hit.powod } : null;
+        const hit = deviations.find((d) => d.pages.includes(page) && d.widths.includes(vp));
+        return hit ? { limit: hit.tolerance, reason: hit.reason } : null;
     };
 
     const results = [];
@@ -50,7 +50,7 @@ async function main() {
     try {
         viewports = (await readdir(OLD, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name);
     } catch {
-        console.error(`Brak katalogu ${OLD}. Najpierw uruchom capture.mjs.`);
+        console.error(`Directory ${OLD} not found. Run capture.mjs first.`);
         process.exit(1);
     }
 
@@ -66,7 +66,7 @@ async function main() {
                 a = PNG.sync.read(await readFile(oldPath));
                 b = PNG.sync.read(await readFile(newPath));
             } catch {
-                results.push({ vp, file, status: "BRAK", note: `nie znaleziono ${newPath}` });
+                results.push({ vp, file, status: "FAIL", note: `${newPath} not found` });
                 continue;
             }
 
@@ -91,8 +91,8 @@ async function main() {
             const limit = allow ? allow.limit : THRESHOLD;
 
             let status = "OK";
-            if (pct > limit || heightDelta >= 8) status = "BŁĄD";
-            else if (allow && pct > THRESHOLD) status = "ODSTĘPSTWO";
+            if (pct > limit || heightDelta >= 8) status = "FAIL";
+            else if (allow && pct > THRESHOLD) status = "DEVIATION";
 
             results.push({
                 vp,
@@ -101,40 +101,40 @@ async function main() {
                 changed,
                 heightDelta,
                 status,
-                powod: status === "ODSTĘPSTWO" ? allow.powod : null,
+                reason: status === "DEVIATION" ? allow.reason : null,
                 diffFile: pct > 0 ? `diff/${diffFile}` : null,
             });
         }
     }
 
     results.sort((x, y) => (y.pct ?? 100) - (x.pct ?? 100));
-    const failed = results.filter((r) => r.status === "BŁĄD");
-    const accepted = results.filter((r) => r.status === "ODSTĘPSTWO");
+    const failed = results.filter((r) => r.status === "FAIL");
+    const accepted = results.filter((r) => r.status === "DEVIATION");
 
-    const rows = results.map((r) => `<tr class="${r.status === "OK" ? "ok" : r.status === "ODSTĘPSTWO" ? "dev" : "bad"}">
+    const rows = results.map((r) => `<tr class="${r.status === "OK" ? "ok" : r.status === "DEVIATION" ? "dev" : "bad"}">
       <td>${r.vp}</td><td>${r.file.replace(".png", "")}</td>
       <td>${r.pct ?? "—"}%</td><td>${r.changed ?? "—"}</td><td>${r.heightDelta ?? "—"}px</td>
-      <td>${r.status}${r.powod ? `<br><span style="font-weight:400;font-size:11px;color:#666">${r.powod}</span>` : ""}</td>
-      <td>${r.diffFile ? `<a href="${r.diffFile}">podgląd</a>` : ""}</td></tr>`).join("\n");
+      <td>${r.status}${r.reason ? `<br><span style="font-weight:400;font-size:11px;color:#666">${r.reason}</span>` : ""}</td>
+      <td>${r.diffFile ? `<a href="${r.diffFile}">view</a>` : ""}</td></tr>`).join("\n");
 
     await writeFile(path.join(OUT, "visual.html"), `<!doctype html><meta charset="utf-8">
-<title>Przykład — diff wizualny</title>
+<title>Visual diff</title>
 <style>body{font:14px system-ui;margin:2rem;max-width:1000px}table{border-collapse:collapse;width:100%}
 td,th{border:1px solid #ddd;padding:6px 10px;text-align:left}.ok td{background:#f2fbf3}.bad td{background:#fdf0f0}.dev td{background:#fffbe9}
 h1{margin-bottom:.2rem} .sum{padding:1rem;border-radius:8px;margin:1rem 0;font-weight:600}</style>
-<h1>Diff wizualny: Next.js vs WordPress</h1>
-<p>Próg: ${THRESHOLD}% pikseli na stronę. Tolerancja koloru piksela: ${PIXEL_TOLERANCE}.</p>
+<h1>Visual diff: Next.js vs WordPress</h1>
+<p>Threshold: ${THRESHOLD}% of pixels per page. Per-pixel colour tolerance: ${PIXEL_TOLERANCE}.</p>
 <div class="sum" style="background:${failed.length ? "#fdf0f0" : "#f2fbf3"}">
-${failed.length ? `${failed.length} / ${results.length} zrzutów poza progiem` : `Wszystkie ${results.length} zrzutów w progu`}${accepted.length ? ` (w tym ${accepted.length} zatwierdzonych odstępstw)` : ""}</div>
-<table><tr><th>Szerokość</th><th>Strona</th><th>Różnica</th><th>Piksele</th><th>Δ wysokości</th><th>Status</th><th></th></tr>
+${failed.length ? `${failed.length} / ${results.length} screenshots over threshold` : `All ${results.length} screenshots within threshold`}${accepted.length ? ` (including ${accepted.length} approved deviations)` : ""}</div>
+<table><tr><th>Width</th><th>Page</th><th>Diff</th><th>Pixels</th><th>Height delta</th><th>Status</th><th></th></tr>
 ${rows}</table>`);
 
     console.log(`\nRaport: ${path.join(OUT, "visual.html")}`);
-    for (const r of failed) console.log(`  BŁĄD ${r.vp}/${r.file} — ${r.pct ?? r.note}% (Δh ${r.heightDelta}px)`);
-    for (const r of accepted) console.log(`  ODSTĘPSTWO ${r.vp}/${r.file} — ${r.pct}% (zatwierdzone)`);
+    for (const r of failed) console.log(`  FAIL ${r.vp}/${r.file} - ${r.pct ?? r.note}% (height delta ${r.heightDelta}px)`);
+    for (const r of accepted) console.log(`  DEVIATION ${r.vp}/${r.file} - ${r.pct}% (approved)`);
     console.log(failed.length
-        ? `\n${failed.length}/${results.length} poza progiem`
-        : `\nOK: ${results.length}/${results.length} (w tym ${accepted.length} zatwierdzonych odstępstw)`);
+        ? `\n${failed.length}/${results.length} over threshold`
+        : `\nOK: ${results.length}/${results.length} (including ${accepted.length} approved deviations)`);
     process.exit(failed.length ? 1 : 0);
 }
 

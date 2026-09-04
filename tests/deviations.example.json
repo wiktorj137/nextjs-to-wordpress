@@ -1,0 +1,20 @@
+{
+  "_comment": "Approved deviations from 1:1. The tests pass ONLY these entries — any new difference still fails the gate. Copy to deviations.json.",
+
+  "visual": [
+    {
+      "pages": ["home"],
+      "widths": ["mobile", "tablet"],
+      "tolerance": 1.3,
+      "reason": "Example: fixed a bug in the original where the consent banner covered the CTA button. Be specific about what changed and why."
+    }
+  ],
+
+  "content": [
+    {
+      "pages": ["/404/"],
+      "fields": ["canonical", "description"],
+      "reason": "A 404 page should not declare a canonical URL or a description — that tells Google the content is legitimate."
+    }
+  ]
+}

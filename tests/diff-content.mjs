@@ -1,6 +1,6 @@
-// Porównanie treści, SEO i JSON-LD. Łapie to, czego diff pikselowy nie widzi:
-// zgubiony canonical, przekręcony numer telefonu, inny JSON-LD, martwy link.
-// Użycie: node diff-content.mjs [--old snapshots/old] [--new snapshots/new]
+// Compares content, SEO and JSON-LD. Catches what a pixel diff cannot see:
+// a lost canonical, a mangled phone number, changed JSON-LD, a dead link.
+// Usage: node diff-content.mjs [--old snapshots/old] [--new snapshots/new]
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 
@@ -13,15 +13,15 @@ const OUT = args.report || "report";
 
 const load = async (dir) => JSON.parse(await readFile(path.join(dir, "content.json"), "utf8"));
 
-// Domena różni się między środowiskami: stara strona podaje w canonical i JSON-LD
-// adres produkcyjny (projekt24.pl), nowa localhost. Porównujemy same ścieżki —
-// inaczej każda strona zgłaszałaby fałszywą rozbieżność.
+// Domains differ between environments: the old site emits its production URL in
+// canonical and JSON-LD, the new one emits localhost. Compare paths only, or every
+// page would report a false difference.
 const normUrl = (v) => {
     if (typeof v !== "string") return v;
 
-    // Obrazy przeniosły się z katalogu głównego do motywu (/wp-content/themes/...),
-    // ale to te same pliki. Porównujemy nazwę pliku — inaczej każda strona
-    // zgłaszałaby rozbieżność w og:image i logo, zagłuszając prawdziwe problemy.
+    // Images moved from the site root into the theme (/wp-content/themes/...), but they
+    // are the same files. Compare filenames, or og:image and logo would report a
+    // difference on every page and drown out the real problems.
     if (/\.(png|jpe?g|webp|svg|gif|ico)$/i.test(v)) return v.split("/").pop();
 
     const m = v.match(/^https?:\/\/[^/]+(\/.*)?$/);
@@ -43,11 +43,11 @@ function diffArrays(a = [], b = []) {
     return { missing, added };
 }
 
-/** Zatwierdzone odstępstwa — patrz odstepstwa.json i ODSTEPSTWA.md. */
+/** Approved deviations - see deviations.json and docs/TESTING.md. */
 async function loadDeviations() {
     try {
-        const d = JSON.parse(await readFile(new URL("./odstepstwa.json", import.meta.url), "utf8"));
-        return d.tresc ?? [];
+        const d = JSON.parse(await readFile(new URL("./deviations.json", import.meta.url), "utf8"));
+        return d.content ?? [];
     } catch {
         return [];
     }
@@ -56,11 +56,11 @@ async function loadDeviations() {
 async function main() {
     const deviations = await loadDeviations();
     const acceptedFor = (route, field) =>
-        deviations.find((d) => d.strony.includes(route) && d.pola.includes(field));
+        deviations.find((d) => d.pages.includes(route) && d.fields.includes(field));
 
     const oldData = await load(OLD);
     const newData = await load(NEW);
-    // Kanoniczne URL-e są bezwzględne i wskazują produkcję — sprowadzamy oba do ścieżek.
+    // Canonical URLs are absolute and point at production - reduce both to paths.
     const findings = [];
 
     const routes = [...new Set([...Object.keys(oldData.content), ...Object.keys(newData.content)])];
@@ -72,92 +72,92 @@ async function main() {
             const accepted = acceptedFor(route, field);
             findings.push({
                 route,
-                severity: accepted ? "ODSTĘPSTWO" : severity,
+                severity: accepted ? "DEVIATION" : severity,
                 field,
-                detail: accepted ? accepted.powod : detail,
+                detail: accepted ? accepted.reason : detail,
             });
         };
 
-        if (!n) { add("KRYTYCZNY", "strona", "brak strony w nowej wersji"); continue; }
-        if (!o) { add("UWAGA", "strona", "strona nie istniała w starej wersji"); continue; }
+        if (!n) { add("CRITICAL", "page", "page missing in the new version"); continue; }
+        if (!o) { add("WARNING", "page", "page did not exist in the old version"); continue; }
 
-        // Status HTTP — 404 musi zostać 404, reszta 200.
+        // HTTP status - a 404 must stay a 404, everything else 200.
         if (oldData.statuses[route] !== newData.statuses[route])
-            add("KRYTYCZNY", "status HTTP", `${oldData.statuses[route]} → ${newData.statuses[route]}`);
+            add("CRITICAL", "HTTP status", `${oldData.statuses[route]} → ${newData.statuses[route]}`);
 
-        // SEO: pola, których rozjazd realnie kosztuje pozycje w Google.
+        // SEO: fields where drift genuinely costs search rankings.
         for (const f of ["title", "description", "lang", "robots", "ogTitle", "ogDescription"]) {
-            if (o[f] !== n[f]) add(f === "title" || f === "description" ? "KRYTYCZNY" : "UWAGA", f, `„${o[f]}” → „${n[f]}”`);
+            if (o[f] !== n[f]) add(f === "title" || f === "description" ? "CRITICAL" : "WARNING", f, `„${o[f]}” → „${n[f]}”`);
         }
         for (const f of ["canonical", "ogImage"]) {
             const ov = normUrl(o[f]), nv = normUrl(n[f]);
-            if (ov !== nv) add("KRYTYCZNY", f, `„${ov}” → „${nv}”`);
+            if (ov !== nv) add("CRITICAL", f, `"${ov}" -> "${nv}"`);
         }
 
-        // Struktura nagłówków — inna hierarchia H1/H2 to zmiana SEO, nie kosmetyka.
-        if (!eq(o.h1, n.h1)) add("KRYTYCZNY", "H1", `${JSON.stringify(o.h1)} → ${JSON.stringify(n.h1)}`);
+        // Heading structure - a different H1/H2 hierarchy is an SEO change, not cosmetics.
+        if (!eq(o.h1, n.h1)) add("CRITICAL", "H1", `${JSON.stringify(o.h1)} → ${JSON.stringify(n.h1)}`);
         if (!eq(o.headings, n.headings)) {
             const d = diffArrays(o.headings, n.headings);
-            add("KRYTYCZNY", "nagłówki", `brakuje: ${JSON.stringify(d.missing)}; nadmiarowe: ${JSON.stringify(d.added)}`);
+            add("CRITICAL", "headings", `missing: ${JSON.stringify(d.missing)}; extra: ${JSON.stringify(d.added)}`);
         }
 
-        // JSON-LD porównywany strukturalnie po normalizacji URL-i i kolejności kluczy.
+        // JSON-LD compared structurally, after normalising URLs and key order.
         if (!eq(normalize(o.jsonLd), normalize(n.jsonLd)))
-            add("KRYTYCZNY", "JSON-LD", `stary: ${JSON.stringify(normalize(o.jsonLd)).slice(0, 600)}\nnowy: ${JSON.stringify(normalize(n.jsonLd)).slice(0, 600)}`);
+            add("CRITICAL", "JSON-LD", `old: ${JSON.stringify(normalize(o.jsonLd)).slice(0, 600)}\nnew: ${JSON.stringify(normalize(n.jsonLd)).slice(0, 600)}`);
 
-        // CTA: telefon i WhatsApp to jedyna droga konwersji na tej stronie.
+        // CTAs: contact links are often the only conversion path on the site.
         if (!eq([...o.ctas].sort(), [...n.ctas].sort())) {
             const d = diffArrays(o.ctas, n.ctas);
-            add("KRYTYCZNY", "CTA (tel/WhatsApp)", `brakuje: ${JSON.stringify(d.missing)}; nadmiarowe: ${JSON.stringify(d.added)}`);
+            add("CRITICAL", "CTA links", `missing: ${JSON.stringify(d.missing)}; extra: ${JSON.stringify(d.added)}`);
         }
 
-        // Linki wewnętrzne — łapie zgubione przekierowania i literówki w slugach.
+        // Internal links - catches lost redirects and typos in slugs.
         const d = diffArrays([...new Set(o.links)], [...new Set(n.links)]);
         if (d.missing.length || d.added.length)
-            add("UWAGA", "linki", `brakuje: ${JSON.stringify(d.missing)}; nadmiarowe: ${JSON.stringify(d.added)}`);
+            add("WARNING", "links", `missing: ${JSON.stringify(d.missing)}; extra: ${JSON.stringify(d.added)}`);
 
-        // Ikony strony (favicon). Brak wpisu oznacza, że w karcie przeglądarki
-        // pokaże się domyślne logo WordPressa zamiast logo klienta.
+        // Site icons (favicon). A missing entry means the browser tab shows the
+        // default WordPress logo instead of the client's.
         if (!eq(o.ikony, n.ikony)) {
-            add("KRYTYCZNY", "ikony strony", `${JSON.stringify(o.ikony)} → ${JSON.stringify(n.ikony)}`);
+            add("CRITICAL", "site icons", `${JSON.stringify(o.ikony)} → ${JSON.stringify(n.ikony)}`);
         }
 
-        // Alt-y obrazów i nazwy plików.
+        // Image alt text and filenames.
         const oAlt = o.images.map((i) => i.alt), nAlt = n.images.map((i) => i.alt);
-        if (!eq(oAlt, nAlt)) add("UWAGA", "alt obrazów", `${JSON.stringify(oAlt)} → ${JSON.stringify(nAlt)}`);
-        if (o.images.length !== n.images.length) add("KRYTYCZNY", "liczba obrazów", `${o.images.length} → ${n.images.length}`);
+        if (!eq(oAlt, nAlt)) add("WARNING", "image alt text", `${JSON.stringify(oAlt)} -> ${JSON.stringify(nAlt)}`);
+        if (o.images.length !== n.images.length) add("CRITICAL", "image count", `${o.images.length} -> ${n.images.length}`);
 
-        // Widoczny tekst — ostatnia sieć bezpieczeństwa na zgubioną treść.
+        // Visible text - the last safety net for lost content.
         if (o.bodyText !== n.bodyText) {
             const ow = o.bodyText.split(" "), nw = n.bodyText.split(" ");
             const missing = ow.filter((w) => !nw.includes(w));
-            add(missing.length ? "KRYTYCZNY" : "UWAGA", "tekst strony",
-                `różnica długości ${ow.length} → ${nw.length} słów; brakujące fragmenty: ${JSON.stringify(missing.slice(0, 40))}`);
+            add(missing.length ? "CRITICAL" : "WARNING", "page text",
+                `length ${ow.length} -> ${nw.length} words; missing fragments: ${JSON.stringify(missing.slice(0, 40))}`);
         }
     }
 
-    const crit = findings.filter((f) => f.severity === "KRYTYCZNY");
-    const accepted = findings.filter((f) => f.severity === "ODSTĘPSTWO");
+    const crit = findings.filter((f) => f.severity === "CRITICAL");
+    const accepted = findings.filter((f) => f.severity === "DEVIATION");
     await mkdir(OUT, { recursive: true });
     await writeFile(path.join(OUT, "content.html"), `<!doctype html><meta charset="utf-8">
-<title>Przykład — diff treści i SEO</title>
+<title>Content and SEO diff</title>
 <style>body{font:14px system-ui;margin:2rem;max-width:1100px}table{border-collapse:collapse;width:100%}
 td,th{border:1px solid #ddd;padding:6px 10px;text-align:left;vertical-align:top}
 td:last-child{font:12px ui-monospace,monospace;white-space:pre-wrap;word-break:break-word;max-width:520px}
-.KRYTYCZNY td{background:#fdf0f0}.UWAGA td{background:#fffbe9}.ODSTĘPSTWO td{background:#eef4fd}
+.CRITICAL td{background:#fdf0f0}.WARNING td{background:#fffbe9}.DEVIATION td{background:#eef4fd}
 .sum{padding:1rem;border-radius:8px;margin:1rem 0;font-weight:600}</style>
-<h1>Diff treści i SEO: Next.js vs WordPress</h1>
+<h1>Content and SEO diff: Next.js vs WordPress</h1>
 <div class="sum" style="background:${crit.length ? "#fdf0f0" : "#f2fbf3"}">
-${crit.length ? `${crit.length} rozbieżności krytycznych` : "Brak rozbieżności krytycznych"} — ${findings.length} znalezisk łącznie, w tym ${accepted.length} zatwierdzonych odstępstw</div>
-${findings.length ? `<table><tr><th>Strona</th><th>Waga</th><th>Pole</th><th>Szczegóły</th></tr>
-${findings.map((f) => `<tr class="${f.severity}"><td>${f.route}</td><td>${f.severity}</td><td>${f.field}</td><td>${String(f.detail).replace(/</g, "&lt;")}</td></tr>`).join("\n")}</table>` : "<p>Wszystko zgodne.</p>"}`);
+${crit.length ? `${crit.length} critical differences` : "No critical differences"} - ${findings.length} findings total, including ${accepted.length} approved deviations</div>
+${findings.length ? `<table><tr><th>Page</th><th>Severity</th><th>Field</th><th>Details</th></tr>
+${findings.map((f) => `<tr class="${f.severity}"><td>${f.route}</td><td>${f.severity}</td><td>${f.field}</td><td>${String(f.detail).replace(/</g, "&lt;")}</td></tr>`).join("\n")}</table>` : "<p>Everything matches.</p>"}`);
 
     console.log(`\nRaport: ${path.join(OUT, "content.html")}`);
-    for (const f of crit) console.log(`  KRYTYCZNY ${f.route} — ${f.field}`);
-    for (const f of accepted) console.log(`  ODSTĘPSTWO ${f.route} — ${f.field}`);
+    for (const f of crit) console.log(`  CRITICAL ${f.route} - ${f.field}`);
+    for (const f of accepted) console.log(`  DEVIATION ${f.route} - ${f.field}`);
     console.log(crit.length
-        ? `\n${crit.length} rozbieżności krytycznych`
-        : `\nOK: brak rozbieżności krytycznych (${accepted.length} zatwierdzonych odstępstw, ${findings.length - accepted.length} uwag)`);
+        ? `\n${crit.length} critical differences`
+        : `\nOK: no critical differences (${accepted.length} approved deviations, ${findings.length - accepted.length} warnings)`);
     process.exit(crit.length ? 1 : 0);
 }
 

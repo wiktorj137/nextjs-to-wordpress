@@ -1,8 +1,8 @@
 // Zamienia statyczny eksport Next.js na szkielet motywu WordPress.
-// Zamiast przepisywać ~4600 linii TSX z palca, bierzemy wygenerowany HTML
-// (czyli dokładnie to, co widzi przeglądarka) i tniemy go mechanicznie.
+// Instead of retyping thousands of lines of TSX by hand, take the generated HTML
+// (exactly what the browser sees) and slice it mechanically.
 //
-// Użycie: node html-to-php.mjs --in ../reference-nextjs/out --out ../theme
+// Usage: node html-to-php.mjs --in ../reference-nextjs/out --out ../theme
 import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -13,24 +13,24 @@ const args = Object.fromEntries(
 const IN = args.in || "../reference-nextjs/out";
 const OUT = args.out || "../theme";
 
-// Mapowanie pliku eksportu na szablon i trasę pochodzi z konfiguracji projektu.
+// The export-file -> template/route mapping comes from the project config.
 const CONFIG = JSON.parse(await readFile(args.config || "../migration.config.json", "utf8"));
 const ROUTE_MAP = Object.fromEntries(
-    Object.entries(CONFIG.trasy).filter(([k]) => !k.startsWith("_"))
+    Object.entries(CONFIG.routes).filter(([k]) => !k.startsWith("_"))
 );
 const PREFIX = CONFIG.prefix || "motyw";
 
 const hash = (s) => createHash("sha1").update(s).digest("hex").slice(0, 12);
 
 /**
- * framer-motion renderuje stan początkowy jako inline style: opacity:0 plus transform
- * (translateY, translateX, scale, scaleX — zależnie od sekcji). W eksporcie zostaje to
- * na stałe, więc bez JS strona byłaby PUSTA. Nie teoretycznie: pierwszy test wizualny
- * pokazał całkowicie czarną sekcję pomocy drogowej.
+ * framer-motion renders its initial state as an inline style: opacity:0 plus a
+ * transform (translateY, translateX, scale, scaleX depending on the section).
+ * A static export freezes that permanently, so without JS the page would be BLANK.
+ * Not hypothetically: the first visual test showed an entirely black section.
  *
- * Zamieniamy te dwie deklaracje na atrybut data-reveal (z zachowaniem pozostałych,
- * np. font-size). Widoczność steruje CSS — domyślnie widoczne — a animację dokłada
- * IntersectionObserver dopiero gdy JS działa.
+ * Convert those two declarations into a data-reveal attribute, preserving any others
+ * (e.g. font-size). CSS controls visibility - visible by default - and an
+ * IntersectionObserver adds the animation only once JS is running.
  */
 function convertMotionStyles(html) {
     let count = 0;
@@ -41,7 +41,7 @@ function convertMotionStyles(html) {
         const transform = decls.find((d) => d.startsWith("transform:"));
         const rest = decls.filter((d) => !d.startsWith("transform:") && !/^opacity:\s*0$/.test(d));
 
-        // Bez opacity:0 to nie jest stan początkowy animacji — zostawiamy bez zmian.
+        // Without opacity:0 this is not an animation start state - leave it alone.
         if (!decls.some((d) => /^opacity:\s*0$/.test(d))) return whole;
 
         count++;
@@ -55,14 +55,14 @@ function convertMotionStyles(html) {
 
 function stripNextRuntime(html) {
     return html
-        // Skrypty runtime'u Next i hydracji — w WordPressie nie mają odpowiednika.
+        // Next runtime and hydration scripts - no equivalent in WordPress.
         .replace(/<script[^>]*>[\s\S]*?<\/script>/g, "")
         .replace(/<script[^>]*\/>/g, "")
-        // Znaczniki granic Suspense i pusty kontener hydracji.
+        // Suspense boundary markers and the empty hydration container.
         .replace(/<!--\$-->|<!--\/\$-->|<!--\$\?-->|<!--\$!-->/g, "")
         .replace(/<div hidden="">\s*<\/div>/g, "")
         .replace(/<template[\s\S]*?<\/template>/g, "")
-        // Atrybuty specyficzne dla Reacta/Next — nie wpływają na wygląd.
+        // React/Next-specific attributes - they do not affect appearance.
         .replace(/\s(?:data-precedence|data-nscript|fetchPriority)="[^"]*"/g, "")
         .replace(/\s(?:data-reactroot)(?:="[^"]*")?/g, "");
 }
@@ -70,18 +70,18 @@ function stripNextRuntime(html) {
 function extractJsonLd(html) {
     const out = [];
     for (const m of html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)) {
-        try { out.push(JSON.parse(m[1])); } catch { /* pomijamy niepoprawny blok */ }
+        try { out.push(JSON.parse(m[1])); } catch { /* skip malformed block */ }
     }
     return out;
 }
 
-// Klasy fontów z next/font są generowane z hasha — w motywie zastępujemy je własnymi.
+// next/font class names are hash-generated - the theme replaces them with its own.
 const FONT_CLASS_RE = /\b(?:inter|syne|outfit)_[0-9a-f]+-module__[A-Za-z0-9_]+__variable\s*/g;
 
 function section(html, tag) {
     const start = html.indexOf(`<${tag}`);
     if (start === -1) return null;
-    // Prosty licznik zagnieżdżeń — wystarcza dla dobrze uformowanego eksportu.
+    // A simple nesting counter - sufficient for a well-formed export.
     const re = new RegExp(`</?${tag}[\\s>]`, "g");
     re.lastIndex = start;
     let depth = 0, m;
@@ -108,7 +108,7 @@ async function walk(dir, base = dir) {
 async function main() {
     const files = (await walk(IN)).filter((f) => ROUTE_MAP[f]);
     const missing = Object.keys(ROUTE_MAP).filter((k) => !files.includes(k));
-    if (missing.length) console.warn(`Uwaga — brak w eksporcie: ${missing.join(", ")}`);
+    if (missing.length) console.warn(`Warning - missing from export: ${missing.join(", ")}`);
 
     await mkdir(path.join(OUT, "template-parts"), { recursive: true });
     await mkdir(path.join(OUT, "content", "jsonld"), { recursive: true });
@@ -143,8 +143,8 @@ async function main() {
         body = motion.html;
         revealTotal += motion.count;
 
-        // Obrazy leżą w motywie (assets/img), nie w bibliotece mediów — to elementy
-        // layoutu, których klient nie zmienia. Ścieżki przepisujemy na wywołanie PHP.
+        // Images live in the theme (assets/img), not the media library: they are layout
+        // elements the client does not change. Rewrite the paths into a PHP call.
         body = body.replace(
             /(<img[^>]*?\ssrc=")\/((?:cars\/)?[^"]+\.(?:png|jpe?g|webp|svg))"/g,
             '$1<?php echo esc_url( ${PREFIX}_img( \'$2\' ) ); ?>"'
@@ -157,9 +157,9 @@ async function main() {
         if (nav) navHashes.set(file, hash(nav.html));
         if (nav && !firstNav) firstNav = nav.html;
 
-        // Stopka ma dwa warianty paddingu: strony z paskiem CTA na mobile mają
-        // "pb-28 lg:pb-8", pozostałe "pb-8". Sprowadzamy to do jednej stopki
-        // sterowanej zmienną, zamiast trzymać dwa niemal identyczne partiale.
+        // The footer has two padding variants: pages with a mobile CTA bar use
+        // "pb-28 lg:pb-8", the rest "pb-8". Reduce that to one footer driven by a
+        // variable instead of keeping two nearly identical partials.
         let hasMobileCta = null;
         if (footer) {
             hasMobileCta = /class="[^"]*\bpb-28 lg:pb-8\b/.test(footer.html);
@@ -171,14 +171,14 @@ async function main() {
             );
         }
 
-        // W szablonie strony zostaje wyłącznie <main> — nagłówek i stopka to partiale.
+        // Only <main> stays in the page template - header and footer are partials.
         let inner = main ? main.html : body;
 
-        // W oryginale nawigacja siedzi WEWNĄTRZ <main>. Skoro trafiła do header.php,
-        // to bez usunięcia jej stąd renderowałaby się dwa razy. Wizualnie nie widać
-        // tego wcale (nav jest position:fixed, więc kopie idealnie się nakładają),
-        // ale DOM jest zdublowany, czytniki ekranu czytają menu dwukrotnie,
-        // a skrypty trafiają tylko w pierwszą kopię. Wykrył to diff treści.
+        // In the original the nav sits INSIDE <main>. Since it also went into
+        // header.php, leaving it here would render it twice. Nothing is visible
+        // (the nav is position:fixed, so the copies stack perfectly), but the DOM is
+        // duplicated, screen readers announce the menu twice, and scripts only ever
+        // find the first copy. The content diff caught this.
         if (nav && inner.includes(nav.html)) {
             inner = inner.replace(nav.html, "");
             navStripped++;
@@ -188,24 +188,24 @@ async function main() {
  * Wygenerowane automatycznie z ${file} przez tools/html-to-php.mjs
  * Trasa: ${meta.route}
  *
- * KROK RĘCZNY: podmień treść na pola ACF (the_field/get_field).
- * NIE zmieniaj struktury znaczników ani klas — od tego zależy test wizualny.
+ * MANUAL STEP: swap the content for fields (the_field/get_field).
+ * DO NOT change markup structure or classes - the visual test depends on it.
  */
-${nav ? "" : `// Oryginał renderował tę stronę bez nawigacji — jedyny taki przypadek.
-// Musi być USTAWIONE PRZED get_header(), bo to on wypisuje nawigację.
+${nav ? "" : `// The original rendered this page without navigation - the only such case.
+// Must be set BEFORE get_header(), because that is what emits the nav.
 ${PREFIX}_set_nav( false );
 `}get_header();
 ${hasMobileCta === false ? `
-// Ta strona nie pokazuje paska CTA na mobile — stopka ma wtedy mniejszy dolny
-// padding (pb-8 zamiast pb-28). Bez tego strona jest o 80 px wyższa niż oryginał.
+// This page has no mobile CTA bar, so the footer uses smaller bottom padding
+// (pb-8 instead of pb-28). Without this the page is 80px taller than the original.
 ${PREFIX}_set_mobile_cta( false );
 ` : ""}?>
 ${inner}
 <?php get_footer(); ?>
 `;
-        // Kilka stron może dzielić jeden szablon (np. wszystkie produkty).
-        // Jako wzorzec bierzemy stronę o NAJBOGATSZEJ treści — inaczej szablon
-        // wygenerowany z wpisu bez FAQ nie miałby czego podpiąć pod pole.
+        // Several pages may share one template (e.g. all products). Use the page with
+        // the RICHEST content as the source - a template generated from an entry with
+        // no FAQ would have nothing to wire a field into.
         const richness = jsonLd.find((j) => j["@type"] === "FAQPage")?.mainEntity?.length ?? 0;
         const prev = templateCandidates.get(meta.template);
         if (!prev || richness > prev.richness) {
@@ -218,12 +218,12 @@ ${inner}
         await writeFile(path.join(OUT, `${template}.php`), cand.php);
     }
 
-    // Nagłówek i stopka są identyczne na wszystkich stronach → jeden partial, nie 14 kopii.
+    // Header and footer are identical across pages -> one partial, not N copies.
     const navUnique = new Set(navHashes.values());
     const footerUnique = new Set(footerHashes.values());
 
     await writeFile(path.join(OUT, "header.php"), `<?php
-/** Wygenerowane automatycznie. Nagłówek jest wspólny dla wszystkich ${navHashes.size} stron. */
+/** Generated automatically. The header is shared across all ${navHashes.size} pages. */
 ?><!doctype html>
 <html <?php language_attributes(); ?> class="scroll-smooth">
 <head>
@@ -239,17 +239,17 @@ ${firstNav ?? "<!-- nie znaleziono <nav> -->"}
 
     await writeFile(path.join(OUT, "footer.php"), `<?php
 /**
- * Wygenerowane automatycznie. Stopka jest wspólna dla wszystkich ${footerHashes.size} stron.
- * Pasek CTA na mobile wpływa na dolny padding stopki. Szablony stron wyłączają go
- * przez ${PREFIX}_set_mobile_cta( false ) — zwykła zmienna by tu nie dotarła,
- * bo WordPress ładuje każdy szablon w osobnym zasięgu.
+ * Generated automatically. The footer is shared across all ${footerHashes.size} pages.
+ * The mobile CTA bar affects the footer's bottom padding. Page templates disable it
+ * via ${PREFIX}_set_mobile_cta( false ) - a plain variable would never arrive here,
+ * because WordPress loads each template in its own scope.
  */
 $mobile_cta = ${PREFIX}_show_mobile_cta();
 ?>
 ${firstFooter ?? "<!-- nie znaleziono <footer> -->"}
 <?php
-// Komponenty renderowane w oryginale dopiero po stronie klienta — nie ma ich
-// w statycznym eksporcie, więc pochodzą z tools/extract-client-only.mjs.
+// Components the original rendered client-side only - absent from the static
+// export, so they come from tools/extract-client-only.mjs.
 if ( $mobile_cta ) {
 	get_template_part( 'template-parts/mobile-cta-bar' );
 }
@@ -268,20 +268,20 @@ wp_footer(); ?>
         JSON.stringify({ generated: new Date().toISOString(), templateSources, pages: manifest }, null, 2)
     );
 
-    console.log(`Wygenerowano ${manifest.length} szablonów w ${OUT}`);
-    console.log(`  nagłówek: ${navUnique.size === 1 ? "identyczny na wszystkich stronach ✓" : `UWAGA — ${navUnique.size} wariantów, sprawdź ręcznie`}`);
-    console.log(`  stopka:   ${footerUnique.size === 1 ? "identyczna po normalizacji paddingu ✓" : `UWAGA — ${footerUnique.size} wariantów, sprawdź ręcznie`}`);
+    console.log(`Generated ${manifest.length} templates in ${OUT}`);
+    console.log(`  header: ${navUnique.size === 1 ? "identical on every page" : `WARNING - ${navUnique.size} variants, check manually`}`);
+    console.log(`  footer: ${footerUnique.size === 1 ? "identical after padding normalisation" : `WARNING - ${footerUnique.size} variants, check manually`}`);
     const noCta = manifest.filter((m) => m.mobileCta === false).map((m) => m.route);
-    console.log(`  bez paska CTA na mobile: ${noCta.join(", ") || "brak"} → w tych szablonach ustaw $mobile_cta = false;`);
+    console.log(`  no mobile CTA bar: ${noCta.join(", ") || "none"}`);
     const byTemplate = manifest.reduce((a, m) => ({ ...a, [m.template]: (a[m.template] ?? 0) + 1 }), {});
     for (const [t, n] of Object.entries(byTemplate)) {
         const src = templateCandidates.get(t);
-        const note = n > 1 ? `stron (współdzielony, wzorzec: ${src?.slug}, ${src?.richness} FAQ)` : "strona";
+        const note = n > 1 ? `pages (shared, source: ${src?.slug}, ${src?.richness} FAQ)` : "page";
         console.log(`  ${t}.php ← ${n} ${note}`);
     }
-    console.log(`  nawigacja: usunięta z ${navStripped} szablonów (w oryginale była wewnątrz <main>)`);
-    console.log(`  animacje wejścia: ${revealTotal} elementów przepiętych z inline opacity:0 na data-reveal`);
-    console.log(`\nŁącznie ${(manifest.reduce((a, m) => a + m.bytes, 0) / 1024).toFixed(0)} kB markupu przeniesione bez przepisywania z palca.`);
+    console.log(`  nav: stripped from ${navStripped} templates (it lives inside <main> in the original)`);
+    console.log(`  entry animations: ${revealTotal} elements moved from inline opacity:0 to data-reveal`);
+    console.log(`\n${(manifest.reduce((a, m) => a + m.bytes, 0) / 1024).toFixed(0)} kB of markup moved without any hand-retyping.`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

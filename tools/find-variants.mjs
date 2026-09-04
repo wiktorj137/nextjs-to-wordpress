@@ -1,11 +1,11 @@
-// Wykrywa, które teksty różnią się między stronami dzielącymi jeden szablon.
+// Detects which texts differ between pages that share a template.
 //
-// Trzy kategorie pojazdów mają identyczną strukturę znaczników i różnią się tylko
-// treścią. Zamiast ręcznie przeglądać 22 kB markupu w poszukiwaniu miejsc do
-// upolowania, porównujemy sekwencje tekstów z eksportu — to, co się różni,
-// to dokładnie lista pól, których potrzebuje klient.
+// Pages sharing a template have identical markup and differ only in content.
+// Instead of reading through tens of kilobytes of markup hunting for the spots
+// to parameterise, compare the text sequences from the export: what differs
+// is exactly the list of fields the client needs.
 //
-// Użycie: node find-variants.mjs --in ../reference-nextjs/out --theme ../theme
+// Usage: node find-variants.mjs --in ../reference-nextjs/out --theme ../theme
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -15,7 +15,7 @@ const args = Object.fromEntries(
 const IN = args.in || "../reference-nextjs/out";
 const THEME = args.theme || "../theme";
 
-/** Wyciąga teksty w kolejności występowania, pomijając skrypty i style. */
+/** Returns text nodes in document order, skipping scripts and styles. */
 function textNodes(html) {
     const body = html.slice(html.indexOf("<body"), html.lastIndexOf("</body>"));
     const clean = body
@@ -42,8 +42,8 @@ async function main() {
         groups.get(p.template).push(p);
     }
 
-    // FAQ jest już pętlą w szablonie, a różna liczba pytań rozjeżdżałaby
-    // porównanie pozycyjne. Usuwamy je z sekwencji przed zestawieniem.
+    // FAQs are already a loop in the template, and a differing number of questions
+    // would throw off the positional comparison. Drop them before comparing.
     const pagesData = JSON.parse(await readFile(path.join(THEME, "content", "pages.json"), "utf8"));
     const faqTexts = (slug) => {
         const p = pagesData.find((x) => x.slug === slug);
@@ -67,10 +67,10 @@ async function main() {
         const base = manifest.templateSources[template].slug;
 
         if (lengths.length > 1) {
-            // Różna liczba tekstów = różna liczba elementów (np. inna liczba FAQ).
-            // Wtedy porównanie pozycyjne nie ma sensu i trzeba to obejrzeć.
-            console.log(`${template}: strony mają różną liczbę tekstów (${lengths.join(", ")}) — porównanie pozycyjne pominięte`);
-            result[template] = { base, uwaga: "różna liczba elementów", dlugosci: Object.fromEntries(Object.entries(texts).map(([k, v]) => [k, v.length])) };
+            // A different text count means a different element count. Positional
+            // comparison is meaningless then and needs a human look.
+            console.log(`${template}: pages have different text counts (${lengths.join(", ")}) — positional comparison skipped`);
+            result[template] = { base, warning: "different element count", lengths: Object.fromEntries(Object.entries(texts).map(([k, v]) => [k, v.length])) };
             continue;
         }
 
@@ -79,11 +79,11 @@ async function main() {
         for (let i = 0; i < n; i++) {
             const values = Object.fromEntries(pages.map((p) => [p.slug, texts[p.slug][i]]));
             const unique = new Set(Object.values(values));
-            if (unique.size > 1) variants.push({ index: i, wzorzec: values[base], wartosci: values });
+            if (unique.size > 1) variants.push({ index: i, source: values[base], values: values });
         }
 
-        result[template] = { base, liczbaTekstow: n, roznice: variants };
-        console.log(`${template}: ${variants.length} z ${n} tekstów różni się między ${pages.length} stronami`);
+        result[template] = { base, liczbaTekstow: n, differences: variants };
+        console.log(`${template}: ${variants.length} of ${n} texts differ across ${pages.length} pages`);
     }
 
     await writeFile(path.join(THEME, "content", "variants.json"), JSON.stringify(result, null, 2));

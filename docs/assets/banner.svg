@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 260" width="960" height="260" role="img" aria-label="next-to-wp: migrate Next.js to WordPress without rewriting markup">
+  <defs>
+    <linearGradient id="arrow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Next.js side -->
+  <rect x="40" y="70" width="230" height="120" rx="14" fill="none" stroke="#8b8b95" stroke-width="2"/>
+  <text x="155" y="118" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="19" fill="#8b8b95" text-anchor="middle">Next.js</text>
+  <text x="155" y="145" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13" fill="#8b8b95" text-anchor="middle">static export</text>
+  <text x="155" y="166" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13" fill="#8b8b95" text-anchor="middle">.html</text>
+
+  <!-- arrow -->
+  <line x1="285" y1="130" x2="655" y2="130" stroke="url(#arrow)" stroke-width="3"/>
+  <polygon points="655,130 641,122 641,138" fill="#0ea5e9"/>
+  <text x="470" y="112" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="14" fill="#6366f1" text-anchor="middle">cut, don't retype</text>
+  <text x="470" y="156" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="12" fill="#8b8b95" text-anchor="middle">markup and classes stay byte-identical</text>
+
+  <!-- WordPress side -->
+  <rect x="670" y="70" width="250" height="120" rx="14" fill="none" stroke="#8b8b95" stroke-width="2"/>
+  <text x="795" y="118" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="19" fill="#8b8b95" text-anchor="middle">WordPress</text>
+  <text x="795" y="145" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13" fill="#8b8b95" text-anchor="middle">PHP templates</text>
+  <text x="795" y="166" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13" fill="#8b8b95" text-anchor="middle">+ editable fields</text>
+
+  <!-- proof line -->
+  <text x="480" y="228" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="14" fill="#22a06b" text-anchor="middle">45/45 screenshots within threshold · 0 critical SEO diffs</text>
+</svg>

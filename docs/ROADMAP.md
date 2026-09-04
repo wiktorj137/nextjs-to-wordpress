@@ -1,51 +1,59 @@
-# Droga do programu
+# Roadmap
 
-Cel: narzędzie, które przeprowadza migrację półautomatycznie, a człowiek
-podejmuje tylko decyzje projektowe.
+The goal: a tool that runs the migration semi-automatically, leaving humans only the
+design decisions.
 
-## Gdzie jesteśmy
+## Where we are
 
-**Zautomatyzowane w całości:**
-- przeniesienie markupu i wykrycie szablonów współdzielonych
-- fonty z metrykami fallbacku
-- komponenty renderowane po stronie klienta
-- wykrycie, które teksty mają być polami
-- podmiana treści na pola i powtórzeń na pętle
-- import treści, menu, roli klienta
-- dowód zgodności (wygląd + treść + wydajność)
+**Fully automated**
 
-**Nadal ręczne — i słusznie:**
-- **nazwy i typy pól.** Automat wie, że tekst nr 13 się różni. Nie wie, czy to
-  „intro", czy „opis skrócony", ani czy ma być polem tekstowym czy edytorem.
-  To decyzja projektowa i nie powinna być generowana.
-- **model treści.** Co jest typem treści, a co pojedynczą stroną.
-- **granica edytowalności.** Co klient może zmieniać, a co ma być zablokowane.
+- moving the markup and detecting shared templates
+- fonts with fallback metrics
+- client-only components
+- working out which texts should be fields
+- swapping text for fields and repetitions for loops
+- importing content, menus and the client role
+- proving equivalence (visual + content + performance)
 
-**Ręczne, ale do zautomatyzowania:**
-- rejestracja pól (generowalna z mapy pól)
-- rejestracja typów treści (jest już w konfiguracji)
-- JSON-LD (odtwarzalne z oryginału — struktura jest w eksporcie)
-- reguły przepisywania adresów
+**Still manual — and rightly so**
 
-## Następne kroki
+- **Field names and types.** The tool knows text #13 differs. It does not know whether
+  that is an "intro" or a "short description", nor whether it should be a text field or
+  an editor. That is a design decision and should not be generated.
+- **The content model.** What is a post type versus a single page.
+- **The editability boundary.** What the client may change and what stays locked.
 
-1. **Generator definicji pól** z `mapaPol` — dziś pisane ręcznie w PHP,
-   a mapa zawiera już prawie wszystko.
-2. **Odtwarzanie JSON-LD z eksportu.** Struktura jest w statycznym HTML;
-   dziś przepisuje się ją do PHP ręcznie, a to najbardziej żmudny krok po polach.
-3. **Kreator konfiguracji** — zamiast wypełniać JSON z ręki, interaktywnie:
-   pokaż wykryte trasy, zaproponuj szablony, zapytaj o nazwy pól.
-4. **Druga migracja.** Narzędzia przeszły jeden projekt od początku do końca.
-   Dopiero drugi pokaże, co jest naprawdę uogólnione, a co tylko wygląda.
-5. **Wsparcie dla innych źródeł** — Astro, Gatsby, zwykły HTML. Metoda
-   („potnij wygenerowany HTML") nie jest specyficzna dla Next.js.
+**Manual, but automatable**
 
-## Czego świadomie nie robić
+- field definitions (derivable from the field map)
+- post type registration (already in the config)
+- JSON-LD (reproducible from the original — the structure is in the export)
+- rewrite rules
 
-- **Nie generuj nazw pól automatycznie.** Klient zobaczy je w panelu.
-  `pole_13` to gorsze doświadczenie niż dziesięć minut pracy człowieka.
-- **Nie próbuj odtwarzać animacji Reacta jeden do jednego.** Eksport nie odróżnia
-  animacji przy wczytaniu od animacji przy przewijaniu. Zmierz zachowanie
-  na żywej stronie i odtwórz regułą.
-- **Nie luzuj progów testowych, żeby było zielono.** Od tego zaczyna się
-  nieufność do własnego raportu.
+## Next steps
+
+These are also the best places to contribute. See [CONTRIBUTING.md](../CONTRIBUTING.md).
+
+1. **Field definition generator** from `mapaPol` — currently hand-written PHP, while
+   the map already holds nearly everything needed.
+2. **Reproduce JSON-LD from the export.** The structure sits in the static HTML;
+   today it is transcribed into PHP by hand, which is the most tedious step after fields.
+3. **A config wizard** — instead of filling in JSON by hand: show detected routes,
+   propose templates, ask for field names.
+4. **A second migration.** The tools carried one project end to end. Only a second one
+   will show what is genuinely general and what merely looks it.
+5. **Other sources** — Astro, Gatsby, plain HTML. The method ("slice the generated
+   HTML") is not specific to Next.js.
+6. **Config validation.** Right now a typo in `migration.config.json` surfaces as a
+   stack trace deep inside a tool. A schema check at load time is a small,
+   self-contained first contribution.
+
+## Deliberate non-goals
+
+- **Do not auto-generate field names.** The client sees them in the admin panel.
+  `field_13` is a worse experience than ten minutes of human work.
+- **Do not try to replicate React animations one to one.** The export cannot
+  distinguish mount animations from scroll animations. Measure the behaviour on the
+  live site and reproduce it with a rule.
+- **Do not loosen test thresholds to get green.** That is where distrust of your own
+  report begins.

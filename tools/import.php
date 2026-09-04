@@ -1,54 +1,54 @@
 <?php
 /**
- * Import treści do WordPressa z plików JSON wygenerowanych przez narzędzia z tools/.
+ * Imports content into WordPress from the JSON files produced by the tools in tools/.
  *
- * Uruchomienie:  wp eval-file tools/import.php
+ * Run with:  wp eval-file tools/import.php
  *
- * Skrypt jest IDEMPOTENTNY — można go puszczać wielokrotnie. Wpisy dopasowywane
- * są po slugu, więc kolejne uruchomienie aktualizuje, a nie duplikuje. To ważne:
- * import przestaje być jednorazową akcją „na produkcji", a staje się częścią
- * procesu, którą można powtórzyć po każdej zmianie w oryginale.
+ * The script is IDEMPOTENT - run it as many times as you like. Posts are matched by
+ * slug, so a second run updates rather than duplicates. That matters: the import stops
+ * being a one-shot action against production and becomes a repeatable part of the
+ * process, to be re-run after any change to the original.
  *
- * Czyta:
- *   migration.config.json        — mapa tras na typy treści
- *   <motyw>/content/pages.json   — metadane i FAQ (extract-content.mjs)
- *   <motyw>/content/fields.json  — wartości pól per strona (wire-fields.mjs)
+ * Reads:
+ *   migration.config.json       - route to post-type mapping
+ *   <theme>/content/pages.json  - metadata and FAQs (extract-content.mjs)
+ *   <theme>/content/fields.json - per-page field values (wire-fields.mjs)
  */
 
 defined( 'ABSPATH' ) || exit;
 
 $config_path = getenv( 'MIGRATION_CONFIG' ) ?: dirname( __DIR__ ) . '/migration.config.json';
 if ( ! file_exists( $config_path ) ) {
-	WP_CLI::error( "Brak pliku konfiguracji: {$config_path}" );
+	WP_CLI::error( "Config file not found: {$config_path}" );
 }
 
 $config      = json_decode( file_get_contents( $config_path ), true );
 $prefix      = $config['prefix'] ?? 'motyw';
 $content_dir = get_template_directory() . '/content';
 
-$wczytaj = function ( string $plik ) use ( $content_dir ) {
-	$sciezka = $content_dir . '/' . $plik;
-	return file_exists( $sciezka ) ? json_decode( file_get_contents( $sciezka ), true ) : array();
+$read = function ( string $file ) use ( $content_dir ) {
+	$path = $content_dir . '/' . $file;
+	return file_exists( $path ) ? json_decode( file_get_contents( $path ), true ) : array();
 };
 
-$pages        = $wczytaj( 'pages.json' );
-$field_values = $wczytaj( 'fields.json' );
+$pages        = $read( 'pages.json' );
+$field_values = $read( 'fields.json' );
 
 if ( ! $pages ) {
-	WP_CLI::error( 'Brak pages.json — uruchom najpierw `make content`.' );
+	WP_CLI::error( 'pages.json missing - run `make content` first.' );
 }
 
-/** Znajduje wpis po slugu albo tworzy nowy. */
-function migracja_upsert( string $slug, string $type, string $title ): int {
-	$istnieje = get_posts( array(
+/** Finds a post by slug, or creates one. */
+function migration_upsert( string $slug, string $type, string $title ): int {
+	$existing = get_posts( array(
 		'name'        => $slug,
 		'post_type'   => $type,
 		'post_status' => 'any',
 		'numberposts' => 1,
 	) );
 
-	if ( $istnieje ) {
-		return $istnieje[0]->ID;
+	if ( $existing ) {
+		return $existing[0]->ID;
 	}
 
 	$id = wp_insert_post( array(
@@ -59,76 +59,76 @@ function migracja_upsert( string $slug, string $type, string $title ): int {
 	), true );
 
 	if ( is_wp_error( $id ) ) {
-		WP_CLI::error( "Nie udało się utworzyć „{$title}”: " . $id->get_error_message() );
+		WP_CLI::error( "Could not create \"{$title}\": " . $id->get_error_message() );
 	}
 
 	return $id;
 }
 
-$utworzono = 0;
-$zaktualizowano = 0;
+$created = 0;
+$updated = 0;
 
-foreach ( $config['trasy'] as $plik => $cfg ) {
-	if ( str_starts_with( $plik, '_' ) ) {
+foreach ( $config['trasy'] as $file => $cfg ) {
+	if ( str_starts_with( $file, '_' ) ) {
 		continue;
 	}
 
 	$route = $cfg['route'];
-	$dane  = null;
+	$data  = null;
 	foreach ( $pages as $p ) {
 		if ( $p['route'] === $route ) {
-			$dane = $p;
+			$data = $p;
 			break;
 		}
 	}
 
-	if ( ! $dane ) {
-		WP_CLI::warning( "Brak danych dla trasy {$route} — pomijam." );
+	if ( ! $data ) {
+		WP_CLI::warning( "No data for route {$route} - skipping." );
 		continue;
 	}
 
-	// Typ treści wynika z szablonu: szablon współdzielony przez kilka stron
-	// deklaruje post_type w mapaPol, pojedyncza strona to zwykła „page”.
+	// The post type follows from the template: a template shared by several pages
+	// declares its post_type in the field map; a one-off page is a plain 'page'.
 	$post_type = $config['mapaPol'][ $cfg['template'] ]['post_type'] ?? 'page';
 	$slug      = $cfg['slug'];
 
-	$przed = get_posts( array( 'name' => $slug, 'post_type' => $post_type, 'post_status' => 'any', 'numberposts' => 1 ) );
-	$id    = migracja_upsert( $slug, $post_type, $cfg['title'] ?? $slug );
-	$przed ? $zaktualizowano++ : $utworzono++;
+	$before = get_posts( array( 'name' => $slug, 'post_type' => $post_type, 'post_status' => 'any', 'numberposts' => 1 ) );
+	$id    = migration_upsert( $slug, $post_type, $cfg['title'] ?? $slug );
+	$before ? $updated++ : $created++;
 
-	// --- SEO: dokładnie te wartości, które miała stara strona -----------
-	if ( ! empty( $dane['seo']['title'] ) ) {
-		update_field( 'seo_title', $dane['seo']['title'], $id );
+	// --- SEO: exactly the values the old site had -----------------------
+	if ( ! empty( $data['seo']['title'] ) ) {
+		update_field( 'seo_title', $data['seo']['title'], $id );
 	}
-	if ( ! empty( $dane['seo']['description'] ) ) {
-		update_field( 'seo_description', $dane['seo']['description'], $id );
+	if ( ! empty( $data['seo']['description'] ) ) {
+		update_field( 'seo_description', $data['seo']['description'], $id );
 	}
 
-	// --- Pola wykryte przez porównanie stron o wspólnym szablonie -------
+	// --- Fields discovered by comparing pages that share a template -----
 	$entry = $field_values[ $slug ] ?? null;
 	if ( $entry ) {
 		if ( ! empty( $entry['tytul'] ) ) {
 			wp_update_post( array( 'ID' => $id, 'post_title' => $entry['tytul'] ) );
 		}
-		foreach ( $entry['fields'] as $nazwa => $wartosc ) {
-			if ( null === $wartosc || '' === $wartosc || array() === $wartosc ) {
+		foreach ( $entry['fields'] as $name => $value ) {
+			if ( null === $value || '' === $value || array() === $value ) {
 				continue;
 			}
-			update_field( $nazwa, $wartosc, $id );
+			update_field( $name, $value, $id );
 		}
 	}
 
 	// --- FAQ -----------------------------------------------------------
-	if ( ! empty( $dane['faq'] ) ) {
-		$wiersze = array();
-		foreach ( $dane['faq'] as $faq ) {
+	if ( ! empty( $data['faq'] ) ) {
+		$rows = array();
+		foreach ( $data['faq'] as $faq ) {
 			if ( empty( $faq['pytanie'] ) || empty( $faq['odpowiedz'] ) ) {
 				continue;
 			}
-			$wiersze[] = array( 'pytanie' => $faq['pytanie'], 'odpowiedz' => $faq['odpowiedz'] );
+			$rows[] = array( 'pytanie' => $faq['pytanie'], 'odpowiedz' => $faq['odpowiedz'] );
 		}
-		if ( $wiersze ) {
-			update_field( 'faq', $wiersze, $id );
+		if ( $rows ) {
+			update_field( 'faq', $rows, $id );
 		}
 	}
 
@@ -138,56 +138,56 @@ foreach ( $config['trasy'] as $plik => $cfg ) {
 	}
 
 	WP_CLI::log( sprintf(
-		'  %-52s → %s #%d (%d FAQ, %d pól)',
+		'  %-52s -> %s #%d (%d FAQ, %d fields)',
 		$route,
 		$post_type,
 		$id,
-		count( $dane['faq'] ?? array() ),
+		count( $data['faq'] ?? array() ),
 		$entry ? count( $entry['fields'] ) : 0
 	) );
 }
 
-// --- Sprzątanie po instalacji WordPressa ---------------------------------
-// Domyślne strony trafiałyby do sitemapy i do menu.
+// --- Clean up after the WordPress install --------------------------------
+// The default pages would otherwise end up in the sitemap and the menu.
 foreach ( array( 'sample-page', 'privacy-policy' ) as $slug ) {
-	$domyslna = get_posts( array( 'name' => $slug, 'post_type' => 'page', 'post_status' => 'any', 'numberposts' => 1 ) );
-	if ( $domyslna ) {
-		wp_delete_post( $domyslna[0]->ID, true );
-		WP_CLI::log( "  usunięto domyślną stronę: {$slug}" );
+	$default_page = get_posts( array( 'name' => $slug, 'post_type' => 'page', 'post_status' => 'any', 'numberposts' => 1 ) );
+	if ( $default_page ) {
+		wp_delete_post( $default_page[0]->ID, true );
+		WP_CLI::log( "  removed default page: {$slug}" );
 	}
 }
 $hello = get_posts( array( 'name' => 'hello-world', 'post_type' => 'post', 'post_status' => 'any', 'numberposts' => 1 ) );
 if ( $hello ) {
 	wp_delete_post( $hello[0]->ID, true );
-	WP_CLI::log( '  usunięto domyślny wpis: hello-world' );
+	WP_CLI::log( '  removed default post: hello-world' );
 }
 
-// --- Rola klienta --------------------------------------------------------
-// Redaktor edytuje treść i nie ma dostępu do wyglądu, wtyczek ani kodu.
-$redaktor = get_role( 'editor' );
-if ( $redaktor ) {
+// --- Client role ---------------------------------------------------------
+// The editor role edits content and has no access to appearance, plugins or code.
+$editor = get_role( 'editor' );
+if ( $editor ) {
 	foreach ( array( 'switch_themes', 'edit_themes', 'activate_plugins', 'edit_plugins',
 	                 'install_plugins', 'update_plugins', 'edit_files', 'manage_options' ) as $cap ) {
-		$redaktor->remove_cap( $cap );
+		$editor->remove_cap( $cap );
 	}
-	WP_CLI::log( '  rola Redaktor → ograniczona do edycji treści' );
+	WP_CLI::log( '  editor role -> restricted to content editing' );
 }
 
 flush_rewrite_rules();
 
-WP_CLI::success( sprintf( 'Import zakończony: utworzono %d, zaktualizowano %d.', $utworzono, $zaktualizowano ) );
+WP_CLI::success( sprintf( 'Import finished: %d created, %d updated.', $created, $updated ) );
 
 /*
- * PUNKTY ROZSZERZENIA
+ * EXTENSION POINTS
  *
- * Rzeczy specyficzne dla projektu (daty artykułów, menu, dane firmy w opcjach,
- * treść z edytora WYSIWYG) dopisuje się tutaj. Dwie pułapki warte zapamiętania:
+ * Project-specific work (article dates, menus, business data in options, WYSIWYG
+ * content) goes here. Two pitfalls worth remembering:
  *
- * 1. wp_update_post() ZAWSZE nadpisuje post_modified bieżącym czasem. Jeśli data
- *    modyfikacji ma trafić do JSON-LD zgodnie z oryginałem, zapisz ją wprost
- *    do bazy przez $wpdb->update() i wywołaj clean_post_cache().
+ * 1. wp_update_post() ALWAYS overwrites post_modified with the current time. If a
+ *    modification date must reach JSON-LD matching the original, write it straight
+ *    to the database via $wpdb->update() and call clean_post_cache().
  *
- * 2. update_field() rozwiązuje nazwę pola GLOBALNIE. Dwa repeatery o tej samej
- *    nazwie w różnych grupach pól to cicha utrata danych — zapisze się podpole
- *    z pierwszej znalezionej definicji, reszta przepadnie bez błędu.
+ * 2. update_field() resolves field names GLOBALLY. Two repeaters sharing a name in
+ *    different field groups means silent data loss - subfields from the first matching
+ *    definition are written and the rest vanish without an error.
  */

@@ -1,5 +1,5 @@
-// Zrzuty ekranu wszystkich tras w 3 szerokościach + zrzut struktury DOM/SEO.
-// Użycie: node capture.mjs --base http://localhost:3000 --out snapshots/old
+// Screenshots of every route at 3 widths, plus a capture of DOM/SEO structure.
+// Usage: node capture.mjs --base http://localhost:3000 --out snapshots/old
 import { chromium } from "playwright";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -18,7 +18,7 @@ const OUT = args.out || "snapshots/out";
 
 export const slug = (route) => (route === "/" ? "home" : route.replace(/^\/|\/$/g, "").replace(/\//g, "__"));
 
-// Wycisza to, co z natury różni się między dwoma uruchomieniami i nie jest regresją.
+// Silences what naturally differs between two runs and is not a regression.
 const FREEZE_CSS = `
   *, *::before, *::after {
     animation: none !important;
@@ -42,15 +42,15 @@ async function collectContent(page) {
             ogTitle: document.querySelector('meta[property="og:title"]')?.content ?? null,
             ogDescription: document.querySelector('meta[property="og:description"]')?.content ?? null,
             ogImage: document.querySelector('meta[property="og:image"]')?.content ?? null,
-            // Ikony strony — łatwo je przeoczyć przy migracji, a widać je w karcie przeglądarki.
+            // Site icons - easy to miss in a migration, and visible in the browser tab.
             ikony: Array.from(document.querySelectorAll('link[rel~="icon"], link[rel="apple-touch-icon"]'))
                 .map((el) => ({ rel: el.getAttribute("rel"), sizes: el.getAttribute("sizes"), type: el.getAttribute("type"), plik: (el.getAttribute("href") || "").split("/").pop().split("?")[0] })),
             lang: document.documentElement.lang,
             h1: txt("h1"),
             headings: Array.from(document.querySelectorAll("h1,h2,h3,h4")).map((el) => `${el.tagName}: ${el.textContent.trim().replace(/\s+/g, " ")}`),
-            // Widoczny tekst — łapie zgubione lub przekręcone treści.
+            // Visible text - catches lost or mangled content.
             bodyText: document.body.innerText.replace(/\s+/g, " ").trim(),
-            // Linki wewnętrzne + CTA (tel:, wa.me) — najczęstsze źródło cichych błędów po migracji.
+            // Internal links and CTAs (tel:, wa.me) - the most common source of silent breakage.
             links: attr("a[href]", "href").map((h) => { try { return new URL(h, location.href).pathname + (h.startsWith("tel:") || h.startsWith("mailto:") ? h : ""); } catch { return h; } }),
             ctas: attr('a[href^="tel:"], a[href*="wa.me"], a[href^="mailto:"]', "href"),
             images: Array.from(document.querySelectorAll("img")).map((el) => ({
@@ -58,7 +58,7 @@ async function collectContent(page) {
                 file: (el.currentSrc || el.src || "").split("/").pop()?.split("?")[0] ?? null,
                 loading: el.getAttribute("loading"),
             })),
-            // JSON-LD porównywany strukturalnie, nie jako tekst.
+            // JSON-LD is compared structurally, not as text.
             jsonLd: Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
                 .map((el) => { try { return JSON.parse(el.textContent); } catch { return { __parseError: el.textContent.slice(0, 200) }; } })
                 .sort((a, b) => String(a["@type"]).localeCompare(String(b["@type"]))),
@@ -68,7 +68,7 @@ async function collectContent(page) {
 
 async function main() {
     let routes = JSON.parse(await readFile(new URL("./routes.json", import.meta.url), "utf8"));
-    // --only pozwala porównać pojedyncze trasy w trakcie prac, bez czekania na komplet.
+    // --only lets you compare single routes while working, without a full run.
     if (args.only) {
         const wanted = args.only.split(",").map((r) => r.trim());
         routes = routes.filter((r) => wanted.includes(r));
@@ -88,17 +88,17 @@ async function main() {
             statuses[route] = res?.status() ?? 0;
 
             await page.addStyleTag({ content: FREEZE_CSS });
-            // Przewinięcie do końca odpala wszystkie animacje "on scroll", potem wracamy na górę.
+            // Scrolling to the bottom triggers every on-scroll animation, then we return to the top.
             await page.evaluate(async () => {
                 for (let y = 0; y < document.body.scrollHeight; y += 400) { window.scrollTo(0, y); await new Promise((r) => setTimeout(r, 30)); }
                 window.scrollTo(0, 0);
             });
             await page.waitForTimeout(500);
 
-            // Wyłączamy lazy-loading i czekamy aż każdy obraz będzie ZDEKODOWANY.
-            // Samo "complete" nie wystarcza: przy zrzucie fullPage duże pliki
-            // (tu kilka po ~4 MB) bywają wczytane, ale jeszcze nie namalowane,
-            // co dawało fałszywe różnice na całych kafelkach.
+            // Disable lazy-loading and wait until every image is DECODED.
+            // "complete" alone is not enough: in fullPage captures large files
+            // are often loaded but not yet painted, which produced false
+            // differences across whole cards.
             await page.evaluate(async () => {
                 const imgs = Array.from(document.images);
                 imgs.forEach((i) => { i.loading = "eager"; });
@@ -118,8 +118,8 @@ async function main() {
 
     await mkdir(OUT, { recursive: true });
 
-    // Przy --only scalamy z tym, co już jest — inaczej zrzut jednej trasy
-    // kasowałby dane pozostałych i diff treści porównywałby puste zbiory.
+    // With --only, merge into what is already there: otherwise capturing one route
+    // would wipe the others and the content diff would compare empty sets.
     let merged = { base: BASE, statuses, content };
     if (args.only) {
         try {
@@ -129,12 +129,12 @@ async function main() {
                 statuses: { ...prev.statuses, ...statuses },
                 content: { ...prev.content, ...content },
             };
-        } catch { /* pierwszy przebieg */ }
+        } catch { /* first run */ }
     }
 
     await writeFile(path.join(OUT, "content.json"), JSON.stringify(merged, null, 2));
     await browser.close();
-    console.log(`\nZapisano do ${OUT}`);
+    console.log(`\nSaved to ${OUT}`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
