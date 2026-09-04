@@ -1,0 +1,140 @@
+{
+  "_opis": "Konfiguracja migracji. Wszystko, co zależy od konkretnego projektu, siedzi tutaj — narzędzia w tools/ są bezprojektowe i czytają ten plik.",
+  "prefix": "motyw",
+  "_prefix": "Przedrostek funkcji motywu (motyw_pole, motyw_menu_items...). Zmień na nazwę projektu.",
+  "sciezki": {
+    "eksportNext": "../zrodlo-nextjs/out",
+    "buildNext": "../zrodlo-nextjs",
+    "motyw": "../motyw",
+    "testy": "../tests"
+  },
+  "trasy": {
+    "_opis": "Plik eksportu → trasa w serwisie i nazwa szablonu WordPressa. Nazwy szablonów muszą zgadzać się z hierarchią WP: front-page, page-<slug>, single-<post_type>, 404.",
+    "index.html": {
+      "slug": "home",
+      "route": "/",
+      "template": "front-page"
+    },
+    "o-nas.html": {
+      "slug": "o-nas",
+      "route": "/o-nas/",
+      "template": "page-o-nas"
+    },
+    "oferta/produkt-a.html": {
+      "slug": "produkt-a",
+      "route": "/oferta/produkt-a/",
+      "template": "single-produkt"
+    },
+    "oferta/produkt-b.html": {
+      "slug": "produkt-b",
+      "route": "/oferta/produkt-b/",
+      "template": "single-produkt"
+    },
+    "_not-found.html": {
+      "slug": "404",
+      "route": "/404/",
+      "template": "404"
+    }
+  },
+  "typyTresci": {
+    "_opis": "Szablon współdzielony przez kilka stron = typ treści w WordPressie. Klient dodaje wpis zamiast prosić o nową podstronę.",
+    "produkt": {
+      "etykieta": "Produkty",
+      "etykietaPojedyncza": "Produkt",
+      "rewriteSlug": "oferta",
+      "wspiera": [
+        "title",
+        "thumbnail"
+      ],
+      "ikona": "dashicons-cart"
+    }
+  },
+  "komponentyKlienckie": {
+    "_opis": "Elementy renderowane w Next dopiero po stronie klienta — nie ma ich w statycznym eksporcie. Selektor wykonuje się w przeglądarce na ŻYWEJ starej stronie.",
+    "baner-zgody": {
+      "znajdz": "Array.from(document.querySelectorAll('div')).find(e => /Akceptuj|cookie/i.test(e.textContent) && getComputedStyle(e).position === 'fixed')",
+      "podepnij": [
+        {
+          "szukaj": "<div role=\"dialog\"",
+          "zamien": "<div data-consent hidden role=\"dialog\""
+        }
+      ]
+    },
+    "pasek-cta-mobile": {
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "znajdz": "Array.from(document.querySelectorAll('div')).find(e => getComputedStyle(e).position === 'fixed' && e.querySelector('a[href^=\"tel:\"]'))",
+      "podepnij": [
+        {
+          "szukaj": "^<div ",
+          "zamien": "<div data-mobile-cta ",
+          "regex": true
+        }
+      ]
+    }
+  },
+  "mapaPol": {
+    "_opis": "Wypełniasz PO uruchomieniu find-variants.mjs, które wypisuje, które teksty różnią się między stronami o wspólnym szablonie. Liczba = indeks wariantu, tekst = wartość identyczna na wszystkich stronach (i tak należąca do repeatera).",
+    "single-produkt": {
+      "post_type": "produkt",
+      "tytul": 10,
+      "scalars": {
+        "h1": 12,
+        "intro": 13
+      },
+      "repeatery": {
+        "cechy": {
+          "sub": "cecha",
+          "indeksy": [
+            20,
+            21,
+            22
+          ]
+        },
+        "sekcje": {
+          "pary": true,
+          "sub": [
+            "tytul",
+            "opis"
+          ],
+          "indeksy": [
+            [
+              30,
+              31
+            ],
+            [
+              32,
+              33
+            ]
+          ]
+        }
+      },
+      "wysiwyg": {
+        "_opis": "Opcjonalne. Kontener z treścią o dowolnym HTML-u (akapity, listy) → repeater z edytorem WYSIWYG.",
+        "kontener": "space-y-8",
+        "pole": "sekcje",
+        "podpola": [
+          "tytul",
+          "tresc"
+        ]
+      }
+    }
+  },
+  "menu": [
+    {
+      "label": "O nas",
+      "url": "/o-nas/"
+    },
+    {
+      "label": "Oferta",
+      "url": "/oferta/"
+    },
+    {
+      "label": "Kontakt",
+      "url": "/kontakt/"
+    }
+  ],
+  "_menu": "Pozycje menu z oryginału. Trafiają do szablonu jako wartość zapasowa: gdy klient nie przypisze menu w WordPressie, nawigacja i tak się wyrenderuje."
+}

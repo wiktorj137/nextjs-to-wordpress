@@ -1,0 +1,4 @@
+node_modules/
+migration.config.json
+tests/snapshots/
+tests/report/
